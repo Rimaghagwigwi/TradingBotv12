@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot de Trading Crypto Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Bot de Trading Crypto Pro</h1>
+        
+        <div class="upload-section">
+            <h3>📊 Charger les données OHLCV</h3>
+            <p>Format CSV avec colonnes: timestamp, open, high, low, close, volume</p>
+            <p><strong>Recommandé:</strong> 2000-5000 lignes en timeframe 1H-4H</p>
+            <input type="file" id="csvFile" class="file-input" accept=".csv">
+            <label for="csvFile" class="file-label">Sélectionner le fichier CSV</label>
+            <div id="fileInfo" style="margin-top: 15px; color: #00ff88;"></div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Capital Initial (€)</label>
+                <input type="number" id="initialCapital" value="10000" min="1000" step="1000">
+            </div>
+            <div class="control-group">
+                <label>Frais de Transaction (%)</label>
+                <input type="number" id="fees" value="0.1" min="0" max="1" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>Stop Loss (%)</label>
+                <input type="number" id="stopLoss" value="3" min="0" max="10" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Take Profit (%)</label>
+                <input type="number" id="takeProfit" value="8" min="0" max="20" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Période RSI</label>
+                <input type="number" id="rsiPeriod" value="14" min="5" max="50" step="1">
+            </div>
+            <div class="control-group">
+                <label>Période EMA Rapide</label>
+                <input type="number" id="emaFast" value="12" min="5" max="50" step="1">
+            </div>
+            <div class="control-group">
+                <label>Période EMA Lente</label>
+                <input type="number" id="emaSlow" value="26" min="10" max="100" step="1">
+            </div>
+            <div class="control-group">
+                <label>Période Bollinger Bands</label>
+                <input type="number" id="bbPeriod" value="20" min="10" max="50" step="1">
+            </div>
+        </div>
+
+        <button class="run-button" onclick="runBacktest()">🎯 Lancer le Backtesting</button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyse en cours... Calcul des indicateurs et simulation des trades</p>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="results" id="results" style="display: none;">
+            <div class="result-card">
+                <h3>📈 Performance du Bot</h3>
+                <div class="metric">
+                    <span>PnL Total:</span>
+                    <span class="metric-value" id="botPnl">-</span>
+                </div>
+                <div class="metric">
+                    <span>Rendement:</span>
+                    <span class="metric-value" id="botReturn">-</span>
+                </div>
+                <div class="metric">
+                    <span>Nombre de Trades:</span>
+                    <span class="metric-value" id="numTrades">-</span>
+                </div>
+                <div class="metric">
+                    <span>Taux de Réussite:</span>
+                    <span class="metric-value" id="winRate">-</span>
+                </div>
+                <div class="metric">
+                    <span>Ratio Sharpe:</span>
+                    <span class="metric-value" id="sharpeRatio">-</span>
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>🎯 Buy & Hold</h3>
+                <div class="metric">
+                    <span>PnL Total:</span>
+                    <span class="metric-value" id="holdPnl">-</span>
+                </div>
+                <div class="metric">
+                    <span>Rendement:</span>
+                    <span class="metric-value" id="holdReturn">-</span>
+                </div>
+                <div class="metric">
+                    <span>Frais:</span>
+                    <span class="metric-value" id="holdFees">-</span>
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>⚖️ Comparaison</h3>
+                <div class="metric">
+                    <span>Outperformance:</span>
+                    <span class="metric-value" id="outperformance">-</span>
+                </div>
+                <div class="metric">
+                    <span>Drawdown Max Bot:</span>
+                    <span class="metric-value" id="maxDrawdown">-</span>
+                </div>
+                <div class="metric">
+                    <span>Drawdown Max Hold:</span>
+                    <span class="metric-value" id="holdMaxDrawdown">-</span>
+                </div>
+                <div class="metric">
+                    <span>Volatilité Bot:</span>
+                    <span class="metric-value" id="volatility">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer" style="display: none;">
+            <h3>📊 Évolution du Portfolio</h3>
+            <canvas id="performanceChart" class="chart"></canvas>
+        </div>
+
+        <div id="tradesContainer" style="display: none;">
+            <h3>📋 Historique des Trades</h3>
+            <div class="table-container">
+                <table class="trades-table" id="tradesTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Prix</th>
+                            <th>Quantité</th>
+                            <th>PnL</th>
+                            <th>Signaux</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradesBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
