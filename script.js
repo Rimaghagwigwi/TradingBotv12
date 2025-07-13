@@ -677,7 +677,7 @@ function createChart(botEquity, holdEquity, priceData) {
     
     // Configuration du graphique
     const padding = 50;
-    const chartWidth = canvas.width - 3 * padding;
+    const chartWidth = canvas.width - 2 * padding;
     const chartHeight = canvas.height - 2 * padding;
     
     // Calcul des min/max

@@ -1,0 +1,292 @@
+// tradingEngine.js - Moteur de trading
+
+// Simulation du trading
+function simulateTrading(data, config) {
+    const trades = [];
+    const equity = [];
+    let position = null;
+    let cash = config.initialCapital;
+    let totalValue = cash;
+    
+    for (let i = 50; i < data.length; i++) {
+        const current = data[i];
+        const prev = data[i - 1];
+        
+        // Calcul de la valeur totale du portfolio
+        if (position) {
+            const currentValue = position.quantity * current.close;
+            totalValue = cash + currentValue;
+        } else {
+            totalValue = cash;
+        }
+        
+        equity.push({
+            timestamp: current.timestamp,
+            value: totalValue,
+            price: current.close
+        });
+        
+        // Signaux de trading
+        const signals = generateSignals(current, prev, data[i - 2] || prev);
+        
+        // Gestion des positions existantes
+        if (position) {
+            const currentPrice = current.close;
+            const entryPrice = position.entryPrice;
+            const pnlPercent = (currentPrice - entryPrice) / entryPrice;
+            
+            // Stop Loss
+            if (pnlPercent <= -config.stopLoss) {
+                const sellPrice = entryPrice * (1 - config.stopLoss);
+                const quantity = position.quantity;
+                const proceeds = quantity * sellPrice;
+                const fees = proceeds * config.fees;
+                
+                cash += proceeds - fees;
+                
+                trades.push({
+                    timestamp: current.timestamp,
+                    type: 'SELL',
+                    price: sellPrice,
+                    quantity: quantity,
+                    pnl: proceeds - position.cost - fees,
+                    reason: 'Stop Loss',
+                    signals: signals
+                });
+                
+                position = null;
+            }
+            // Take Profit
+            else if (pnlPercent >= config.takeProfit) {
+                const sellPrice = entryPrice * (1 + config.takeProfit);
+                const quantity = position.quantity;
+                const proceeds = quantity * sellPrice;
+                const fees = proceeds * config.fees;
+                
+                cash += proceeds - fees;
+                
+                trades.push({
+                    timestamp: current.timestamp,
+                    type: 'SELL',
+                    price: sellPrice,
+                    quantity: quantity,
+                    pnl: proceeds - position.cost - fees,
+                    reason: 'Take Profit',
+                    signals: signals
+                });
+                
+                position = null;
+            }
+            // Signal de vente
+            else if (signals.sell) {
+                const quantity = position.quantity;
+                const proceeds = quantity * current.close;
+                const fees = proceeds * config.fees;
+                
+                cash += proceeds - fees;
+                
+                trades.push({
+                    timestamp: current.timestamp,
+                    type: 'SELL',
+                    price: current.close,
+                    quantity: quantity,
+                    pnl: proceeds - position.cost - fees,
+                    reason: 'Signal',
+                    signals: signals
+                });
+                
+                position = null;
+            }
+        }
+        // Signal d'achat
+        else if (signals.buy && cash > 100) {
+            const buyAmount = cash * 0.95; // 95% du capital disponible
+            const fees = buyAmount * config.fees;
+            const quantity = (buyAmount - fees) / current.close;
+            
+            position = {
+                entryPrice: current.close,
+                quantity: quantity,
+                cost: buyAmount,
+                timestamp: current.timestamp
+            };
+            
+            cash -= buyAmount;
+            
+            trades.push({
+                timestamp: current.timestamp,
+                type: 'BUY',
+                price: current.close,
+                quantity: quantity,
+                pnl: 0,
+                reason: 'Signal',
+                signals: signals
+            });
+        }
+    }
+    
+    // Fermeture de la position finale si nécessaire
+    if (position) {
+        const lastPrice = data[data.length - 1].close;
+        const quantity = position.quantity;
+        const proceeds = quantity * lastPrice;
+        const fees = proceeds * config.fees;
+        
+        cash += proceeds - fees;
+        
+        trades.push({
+            timestamp: data[data.length - 1].timestamp,
+            type: 'SELL',
+            price: lastPrice,
+            quantity: quantity,
+            pnl: proceeds - position.cost - fees,
+            reason: 'Final',
+            signals: {}
+        });
+    }
+    
+    return { trades, equity, finalValue: cash };
+}
+
+// Génération des signaux de trading
+function generateSignals(current, prev, prevPrev) {
+    const signals = {
+        buy: false,
+        sell: false,
+        reasons: []
+    };
+    
+    // Vérification que tous les indicateurs sont disponibles
+    if (!current.rsi || !current.emaFast || !current.emaSlow || 
+        !current.macd || !current.macdSignal || !current.bbLower || !current.bbUpper) {
+        return signals;
+    }
+    
+    let buyScore = 0;
+    let sellScore = 0;
+    
+    // RSI
+    if (current.rsi < 30) {
+        buyScore += 2;
+        signals.reasons.push('RSI oversold');
+    } else if (current.rsi > 70) {
+        sellScore += 2;
+        signals.reasons.push('RSI overbought');
+    }
+    
+    // EMA Crossover
+    if (current.emaFast > current.emaSlow && prev.emaFast <= prev.emaSlow) {
+        buyScore += 3;
+        signals.reasons.push('EMA bullish crossover');
+    } else if (current.emaFast < current.emaSlow && prev.emaFast >= prev.emaSlow) {
+        sellScore += 3;
+        signals.reasons.push('EMA bearish crossover');
+    }
+    
+    // MACD
+    if (current.macd > current.macdSignal && prev.macd <= prev.macdSignal) {
+        buyScore += 2;
+        signals.reasons.push('MACD bullish crossover');
+    } else if (current.macd < current.macdSignal && prev.macd >= prev.macdSignal) {
+        sellScore += 2;
+        signals.reasons.push('MACD bearish crossover');
+    }
+    
+    // Bollinger Bands
+    if (current.close < current.bbLower && prev.close >= prev.bbLower) {
+        buyScore += 1;
+        signals.reasons.push('BB oversold');
+    } else if (current.close > current.bbUpper && prev.close <= prev.bbUpper) {
+        sellScore += 1;
+        signals.reasons.push('BB overbought');
+    }
+    
+    // Prix au-dessus/en-dessous des EMA
+    if (current.close > current.emaFast && current.close > current.emaSlow) {
+        buyScore += 1;
+    } else if (current.close < current.emaFast && current.close < current.emaSlow) {
+        sellScore += 1;
+    }
+    
+    // Décision finale
+    signals.buy = buyScore >= 4;
+    signals.sell = sellScore >= 4;
+    
+    return signals;
+}
+
+// Calcul du Buy & Hold
+function calculateBuyAndHold(data, config) {
+    const startPrice = data[0].close;
+    const endPrice = data[data.length - 1].close;
+    const fees = config.initialCapital * config.fees * 2; // Achat + Vente
+    
+    const quantity = (config.initialCapital - config.initialCapital * config.fees) / startPrice;
+    const finalValue = quantity * endPrice - endPrice * quantity * config.fees;
+    
+    const equity = data.map(d => ({
+        timestamp: d.timestamp,
+        value: quantity * d.close,
+        price: d.close
+    }));
+    
+    return {
+        startPrice,
+        endPrice,
+        quantity,
+        finalValue,
+        equity,
+        fees
+    };
+}
+
+// Fonction pour analyser les signaux
+function analyzeSignals() {
+    if (csvData.length === 0) {
+        showStatus('Veuillez d\'abord charger un fichier CSV', 'error');
+        return;
+    }
+    
+    const config = {
+        rsiPeriod: parseInt(document.getElementById('rsiPeriod').value),
+        emaFast: parseInt(document.getElementById('emaFast').value),
+        emaSlow: parseInt(document.getElementById('emaSlow').value),
+        bbPeriod: parseInt(document.getElementById('bbPeriod').value)
+    };
+    
+    const dataWithIndicators = calculateIndicators(csvData, config);
+    
+    let buySignals = 0;
+    let sellSignals = 0;
+    let strongBuySignals = 0;
+    let strongSellSignals = 0;
+    
+    for (let i = 50; i < dataWithIndicators.length; i++) {
+        const current = dataWithIndicators[i];
+        const prev = dataWithIndicators[i - 1];
+        const signals = generateSignals(current, prev, dataWithIndicators[i - 2]);
+        
+        if (signals.buy) {
+            buySignals++;
+            if (signals.reasons.length >= 3) strongBuySignals++;
+        }
+        
+        if (signals.sell) {
+            sellSignals++;
+            if (signals.reasons.length >= 3) strongSellSignals++;
+        }
+    }
+    
+    const analysisResult = `
+        📊 Analyse des signaux sur ${dataWithIndicators.length - 50} périodes:
+        
+        🟢 Signaux d'achat: ${buySignals}
+        🔴 Signaux de vente: ${sellSignals}
+        💪 Signaux d'achat forts: ${strongBuySignals}
+        💪 Signaux de vente forts: ${strongSellSignals}
+        
+        📈 Fréquence des signaux: ${((buySignals + sellSignals) / (dataWithIndicators.length - 50) * 100).toFixed(1)}%
+    `;
+    
+    showStatus(analysisResult, 'info');
+}
